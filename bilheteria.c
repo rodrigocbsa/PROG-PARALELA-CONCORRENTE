@@ -24,10 +24,8 @@ chmod +x bilheteria
 #include <time.h>
 
 void *reservar_passagem(void* thread_data);
-int *verificar_poltronas_disponiveis(void* thread_data); /* VALOR 0 = POLTRONA INDISPONÍVEL */
+int *verificar_poltronas_disponiveis(void * thread_data, int pos); /* VALOR 0 = POLTRONA INDISPONÍVEL */
 void *GerarPassageiros(void* thread_data); 
-int DeMatrizParaHorario(int pos);
-int DeHorarioParaMatriz(int horario);
 
 #define POLTRONAS_TOTAIS 40
 #define HORA_INICIO 7
@@ -49,8 +47,17 @@ typedef struct{
 } passageiro_t;
 
 int main(int argc, char *argv[]) {
-	int quantidade_passageiros = (int) * argv[1];	
-	printf("%d",quantidade_passageiros);
+	
+	if (argc < 2) {
+        printf("Erro: Voce deve fornecer a quantidade de passageiros como argumento.\n");
+        return 1; // Encerrar o programa com código de erro
+    }
+
+    int quantidade_passageiros = atoi(argv[1]);
+
+    printf("Iniciando o programa com %d passageiros...\n", quantidade_passageiros);
+    
+    srand(time(0));
 	
 	sem_t semaphore;
 	sem_init(&semaphore,0,1);
@@ -58,8 +65,9 @@ int main(int argc, char *argv[]) {
 	// Inicializando struct compartilhada
 	shared_t shared_data;
 	int poltrona = 0;
-	for(int l = 0; l < HORAS_TOTAIS; l++){
-		for(int c = 0; c < POLTRONAS_TOTAIS; c++){
+	int l,c;
+	for(l = 0; l < HORAS_TOTAIS; l++){
+		for(c = 0; c < POLTRONAS_TOTAIS; c++){
 			shared_data.onibus[l][c] = poltrona++; // Poltronas devem ser numeradas de 1 a quantidade max de poltronas
 		}
 	}
@@ -82,14 +90,19 @@ void * GerarPassageiros(void * thread_data){
 	
 	passageiro_t passageiro_data[shared->quantidade_passageiros];
 	
-    for(int i = 0; i < shared->quantidade_passageiros; i++){
+	int i;
+    for(i = 0; i < shared->quantidade_passageiros; i++){
     	passageiro_data[i].shared_data = shared;	// A struct de dados compartilhados serão compartilhados entre todos
 		passageiro_data[i].N = i;	// Passageiros devem ser numerados de 0 à quantidade máxima de passageiros
 		passageiro_data[i].reserva_feita = 0;
 		
 		reservar_passagem(&passageiro_data[i]);
-	    if(passageiro_data[i].reserva_feita)
-	    	printf("PASSAGEIRO %d RESERVOU A POLTRONA %d DO ÔNIBUS PARTINDO ÀS %d HORAS",passageiro_data->N,passageiro_data->P,passageiro_data->H);
+	    if(passageiro_data[i].reserva_feita){
+	    	printf("\nPASSAGEIRO %d RESERVOU A POLTRONA %d DO ONIBUS PARTINDO AS %d HORAS",passageiro_data[i].N,passageiro_data[i].P,passageiro_data[i].H);
+		}
+		else{
+			printf("\nPASSAGEIRO %d NAO CONSEGUIU RESERVAR",passageiro_data[i].N);
+		}
 	}
     
     return NULL;
@@ -100,42 +113,43 @@ void* reservar_passagem(void* thread_data){
 	sem_t semaphore = passageiro_data->shared_data->semaphore;
 	
 	// Gerando escolha aleatória de horário e poltrona
-	srand(time(0));
-	passageiro_data->H = (rand() % (HORAS_TOTAIS + 1)) + HORA_INICIO;
-	passageiro_data->P = (rand() % (POLTRONAS_TOTAIS + 1)) + 1;
+	
+	passageiro_data->H = (rand() % HORAS_TOTAIS) + HORA_INICIO;
+	passageiro_data->P = (rand() % POLTRONAS_TOTAIS) + 1;
 	
 	sem_wait(semaphore);
 	
-	int * poltronas_disponiveis = verificar_poltronas_disponiveis(&passageiro_data);
-	int pos = 0;
+	printf("\nPassageiro %d tenta reservar uma passagem na hora %d com a poltrona %d",passageiro_data->N,passageiro_data->H,passageiro_data->P);
 	
-	for(int i = 0; i < POLTRONAS_TOTAIS; i++){
-		int poltrona = poltronas_disponiveis[i];
+	int * poltronas = verificar_poltronas_disponiveis(&passageiro_data->shared_data,passageiro_data->H - HORA_INICIO);
+	
+	int i;
+	for(i = 0; i < POLTRONAS_TOTAIS; i++){
+		int poltrona = poltronas[i];
+		printf("%d ",poltronas[i]);
 		if(poltrona == passageiro_data->P && poltrona != 0){
+			printf("\nConseguiu poltrona");
 			passageiro_data->reserva_feita = 1;
-			passageiro_data->shared_data->onibus[DeHorarioParaMatriz(passageiro_data->H)][passageiro_data->P] = 0;
+			passageiro_data->shared_data->onibus[passageiro_data->H - HORA_INICIO][passageiro_data->P] = 0;
 			break;
 		}
 	}
 	
-	sem_post(semaphore);
-}
-
-int *verificar_poltronas_disponiveis(void * thread_data){
-	passageiro_t *passageiro_data = (passageiro_t*) thread_data;
+	free(poltronas);
 	
-	int *poltronas_disponiveis = malloc(POLTRONAS_TOTAIS);
-	int pos = 0;
-	for(int i = 0; i < POLTRONAS_TOTAIS; i++){
-		poltronas_disponiveis[i] = passageiro_data->shared_data->onibus[DeHorarioParaMatriz(passageiro_data->H)][i];
+	sem_post(semaphore);
+	
+	return NULL;
+}
+
+int *verificar_poltronas_disponiveis(void * thread_data, int pos){
+	shared_t *shared_data = (shared_t*) thread_data;
+	
+	int *poltronas = (int *)malloc(POLTRONAS_TOTAIS * sizeof(int));
+
+	int i;
+	for(i = 0; i < POLTRONAS_TOTAIS; i++){
+		poltronas[i] = shared_data->onibus[pos][i];
 	}
-	return poltronas_disponiveis;
-}
-
-int DeHorarioParaMatriz(int horario){
-	return horario - HORA_INICIO;
-}
-
-int DeMatrizParaHorario(int pos){
-	return pos + HORA_INICIO;
+	return poltronas;
 }
