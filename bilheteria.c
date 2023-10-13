@@ -23,9 +23,9 @@ chmod +x bilheteria
 #include <semaphore.h>
 #include <time.h>
 
-void *reservar_passagem(void* thread_data);
-int *verificar_poltronas_disponiveis(void * thread_data, int pos); /* VALOR 0 = POLTRONA INDISPONÍVEL */
-void *GerarPassageiros(void* thread_data); 
+void *reservar_passagem(void*);
+int *verificar_poltronas_disponiveis(void *, int); /* NÚMERO DA POLTRONA 0 = POLTRONA INDISPONÍVEL */
+void *GerarPassageiros(void*); 
 
 #define POLTRONAS_TOTAIS 40
 #define HORA_INICIO 7
@@ -68,9 +68,11 @@ int main(int argc, char *argv[]) {
 	int l,c;
 	for(l = 0; l < HORAS_TOTAIS; l++){
 		for(c = 0; c < POLTRONAS_TOTAIS; c++){
-			shared_data.onibus[l][c] = poltrona++; // Poltronas devem ser numeradas de 1 a quantidade max de poltronas
+			shared_data.onibus[l][c] = ++poltrona; // Poltronas devem ser numeradas de 1 a quantidade max de poltronas
 		}
+		poltrona = 0;
 	}
+	
 	shared_data.quantidade_passageiros = quantidade_passageiros;
 	shared_data.semaphore = &semaphore;
 	
@@ -85,6 +87,11 @@ horário de ônibus e uma poltrona */
 	return 0;
 }
 
+
+
+/**************
+	FUNÇÕES
+***************/
 void * GerarPassageiros(void * thread_data){
 	shared_t *shared = (shared_t*) thread_data;
 	
@@ -119,14 +126,11 @@ void* reservar_passagem(void* thread_data){
 	
 	sem_wait(semaphore);
 	
-	printf("\nPassageiro %d tenta reservar uma passagem na hora %d com a poltrona %d",passageiro_data->N,passageiro_data->H,passageiro_data->P);
-	
 	int * poltronas = verificar_poltronas_disponiveis(&passageiro_data->shared_data,passageiro_data->H - HORA_INICIO);
 	
 	int i;
 	for(i = 0; i < POLTRONAS_TOTAIS; i++){
 		int poltrona = poltronas[i];
-		printf("%d ",poltronas[i]);
 		if(poltrona == passageiro_data->P && poltrona != 0){
 			printf("\nConseguiu poltrona");
 			passageiro_data->reserva_feita = 1;
@@ -146,10 +150,13 @@ int *verificar_poltronas_disponiveis(void * thread_data, int pos){
 	shared_t *shared_data = (shared_t*) thread_data;
 	
 	int *poltronas = (int *)malloc(POLTRONAS_TOTAIS * sizeof(int));
+	
+	printf("\nVerificando poltronas disponíveis\n");
 
 	int i;
 	for(i = 0; i < POLTRONAS_TOTAIS; i++){
 		poltronas[i] = shared_data->onibus[pos][i];
+		printf("%d ",poltronas[i]);
 	}
 	return poltronas;
 }
