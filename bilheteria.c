@@ -33,7 +33,6 @@ chmod +x bilheteria
 
 typedef struct{
 	int onibus[HORAS_TOTAIS][POLTRONAS_TOTAIS];
-	sem_t semaphore;
 	pthread_mutex_t mutex;
 	int quantidade_passageiros;
 } shared_t;
@@ -54,10 +53,6 @@ void	* EscolherHorarioPoltrona( passageiro_t * );
 void	* ImprimeMensagem( passageiro_t, bool );
 
 
-/* DEBUG*/
-//int reservados = 0, nao_conseguiu = 0;
-
-
 int main(int argc, char *argv[]) {
 	
 	if (argc < 2) {
@@ -67,11 +62,10 @@ int main(int argc, char *argv[]) {
 
     int quantidade_passageiros = atoi(argv[1]);
     
+    
     srand(time(0));
-	
-	sem_t semaphore;
-	sem_init(&semaphore,0,0);
-	
+    
+    
 	// Inicializando struct compartilhada
 	int poltrona = 0;
 	int l,c;
@@ -83,7 +77,6 @@ int main(int argc, char *argv[]) {
 	}
 	
 	shared_data.quantidade_passageiros = quantidade_passageiros;
-	shared_data.semaphore = &semaphore;
 	pthread_mutex_init(&shared_data.mutex, NULL);
 	//$end
 	
@@ -96,7 +89,6 @@ horário de ônibus e uma poltrona" */
 	
 /* Encerrando programa */
 	pthread_join(GeradoraPassageiros,NULL);
-	sem_destroy(&semaphore);
 	pthread_mutex_destroy(&shared_data.mutex);
 	return 0;
 }
@@ -111,16 +103,9 @@ void * GerarPassageiros(void * thread_data){
     for(i = 0; i <= shared_data.quantidade_passageiros; i++){
     	passageiro_t passageiro_data;
 		passageiro_data.N = i; // "Passageiros devem ser numerados de 0 à quantidade máxima de passageiros"
-		//printf("\nVez de: %d",passageiro_data.N);
 		
 		EscolherHorarioPoltrona(&passageiro_data);
 		ImprimeMensagem(passageiro_data,reservar_passagem(passageiro_data.H,passageiro_data.P));
-		
-		/*
-		if(i == shared_data.quantidade_passageiros){
-			printf("\nTotal: reservados - %d || nao conseguiu - %d\n",reservados,nao_conseguiu);
-		}
-		*/
 	}
     
     return NULL;
@@ -136,7 +121,6 @@ void * EscolherHorarioPoltrona(passageiro_t * passageiro_data){
 
 bool reservar_passagem(int horario, int poltrona){
 	pthread_mutex_lock(&shared_data.mutex);
-	//printf("\nPassageiro escolheu horario %d e poltrona %d",horario,poltrona);
 	
 	int *poltronas = verificar_poltronas_disponiveis(horario);
 	
@@ -171,14 +155,8 @@ void *ImprimeMensagem(passageiro_t passageiro_data, bool conseguiu){
 	
 	if(conseguiu){
 		printf("\nPASSAGEIRO %d RESERVOU A POLTRONA %d DO ONIBUS PARTINDO AS %d HORAS",passageiro_data.N,passageiro_data.P,passageiro_data.H);
-		//reservados += 1;
 		fflush(stdout);
 	}
-	/*
-	else{
-		nao_conseguiu += 1;
-	}
-	*/
 	
 	return NULL;
 }
