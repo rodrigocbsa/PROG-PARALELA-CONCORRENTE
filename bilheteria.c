@@ -49,6 +49,7 @@ typedef struct{
 bool	  reservar_passagem( int, int );
 int		* verificar_poltronas_disponiveis( int );
 void	* GerarPassageiros( void * );
+void	* GerarPassageiros2( void * );
 void	* EscolherHorarioPoltrona( passageiro_t * );
 void	* ImprimeMensagem( passageiro_t, bool );
 
@@ -84,11 +85,13 @@ int main(int argc, char *argv[]) {
 	
 /* "Essa thread deverá gerar continuamente passageiros, os quais deverão escolher um
 horário de ônibus e uma poltrona" */
-	pthread_t GeradoraPassageiros;
+	pthread_t GeradoraPassageiros,GeradoraPassageiros2;
 	pthread_create(&GeradoraPassageiros,NULL,GerarPassageiros,NULL);
+	pthread_create(&GeradoraPassageiros2,NULL,GerarPassageiros2,NULL); // Criando concorrência
 	
 /* Encerrando programa */
 	pthread_join(GeradoraPassageiros,NULL);
+	pthread_join(GeradoraPassageiros2,NULL);
 	pthread_mutex_destroy(&shared_data.mutex);
 	return 0;
 }
@@ -100,7 +103,20 @@ horário de ônibus e uma poltrona" */
 ***************/
 void * GerarPassageiros(void * thread_data){
 	int i;
-    for(i = 0; i <= shared_data.quantidade_passageiros; i++){
+    for(i = 0; i < shared_data.quantidade_passageiros / 2; i++){
+    	passageiro_t passageiro_data;
+		passageiro_data.N = i; // "Passageiros devem ser numerados de 0 à quantidade máxima de passageiros"
+		
+		EscolherHorarioPoltrona(&passageiro_data);
+		ImprimeMensagem(passageiro_data,reservar_passagem(passageiro_data.H,passageiro_data.P));
+	}
+    
+    return NULL;
+}
+
+void * GerarPassageiros2(void * thread_data){
+	int i;
+    for(i = shared_data.quantidade_passageiros / 2; i <= shared_data.quantidade_passageiros; i++){
     	passageiro_t passageiro_data;
 		passageiro_data.N = i; // "Passageiros devem ser numerados de 0 à quantidade máxima de passageiros"
 		
